@@ -12,11 +12,6 @@ venv/
 __pycache__/
 *.pyc
 
-# Bỏ qua file weights nặng (Nên upload lên HuggingFace hoặc Drive rồi để link)
-*.pth
-*.pt
-*.ckpt
-
 # Giữ lại folder release nhưng không lấy file weights bên trong (nếu nó nặng)
 # Nếu file weights < 100MB thì có thể comment dòng dưới để push lên
 omni_model_release/weights/*.pth
@@ -25,3 +20,9 @@ omni_model_release/weights/*.pth
 .DS_Store
 .idea/
 .vscode/
+
+# Jupyter Checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+*.ipynb_checkpoints

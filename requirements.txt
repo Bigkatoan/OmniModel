@@ -1,0 +1,11 @@
+torch
+torchvision
+torchaudio
+numpy<2
+opencv-python
+albumentations
+pyyaml
+transformers
+matplotlib
+tqdm
+timm

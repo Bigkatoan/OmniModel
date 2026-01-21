@@ -1,0 +1,50 @@
+# configs/omninet_60m.yaml
+
+system:
+  device: "cuda"
+  seed: 42
+  output_dir: "./checkpoints/v2_no_kpt" # Đổi tên folder output
+  num_workers: 4
+
+data:
+  root_dir: "./data/coco2017"
+  train_img_dir: "train2017"
+  train_json: "annotations/captions_train2017.json"
+  seg_json: "annotations/instances_train2017.json"
+  # kpt_json: ĐÃ BỎ
+  
+  tokenizer_path: "./data/tokenizer.json"
+  img_size: 256
+  max_seq_len: 32
+  vocab_size: 16384
+  batch_size: 64
+
+model:
+  vision:
+    in_chans: 3
+    depths: [3, 3, 9, 3]
+    dims: [96, 192, 384, 768]
+    drop_path_rate: 0.1
+  text:
+    embed_dim: 512
+    depth: 6
+    heads: 8
+    mlp_ratio: 4.0
+    drop_rate: 0.0
+  heads:
+    mask_channels: 256
+    use_caption: True
+    use_segment: True
+    use_keypoint: False # <--- TẮT
+
+train:
+  epochs: 50
+  lr: 0.0003
+  weight_decay: 0.05
+  warmup_epochs: 5
+  clip_grad: 5.0
+  
+  loss_weights:
+    caption: 1.0
+    segment: 2.0
+    keypoint: 0.0 # <--- VỀ 0

@@ -1,0 +1,33 @@
+# configs/text_pretrain.yaml
+
+system:
+  device: "cuda"
+  output_dir: "./runs/omni_clip/exp1"
+  num_workers: 4
+
+data:
+  root_dir: "./data/coco2017"
+  train_img_dir: "train2017"
+  train_json: "annotations/captions_train2017.json"
+  tokenizer_path: "./data/tokenizer.json"
+  img_size: 224
+  max_seq_len: 32
+  vocab_size: 16384
+  # [FIX OOM] Giảm từ 128 xuống 64. 
+  # Nếu GPU vẫn báo lỗi, hãy giảm xuống 32.
+  batch_size: 64 
+
+model:
+  text:
+    embed_dim: 512
+    depth: 6
+    heads: 8
+  vision:
+    depths: [3, 3, 9, 3]
+    dims: [96, 192, 384, 768]
+
+train:
+  epochs: 30
+  lr: 0.0003
+  weight_decay: 0.05
+  temperature: 0.07
