@@ -1,0 +1,27 @@
+# Bỏ qua dữ liệu
+data/
+datasets/
+
+# Bỏ qua output training (checkpoints nặng)
+runs/
+outputs/
+logs/
+
+# Bỏ qua file môi trường ảo & cache
+venv/
+__pycache__/
+*.pyc
+
+# Bỏ qua file weights nặng (Nên upload lên HuggingFace hoặc Drive rồi để link)
+*.pth
+*.pt
+*.ckpt
+
+# Giữ lại folder release nhưng không lấy file weights bên trong (nếu nó nặng)
+# Nếu file weights < 100MB thì có thể comment dòng dưới để push lên
+omni_model_release/weights/*.pth
+
+# Hệ thống
+.DS_Store
+.idea/
+.vscode/
