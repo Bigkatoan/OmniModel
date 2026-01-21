@@ -1,28 +1,25 @@
-# Bỏ qua dữ liệu
+cat <<EOT > .gitignore
+# Chặn dữ liệu & logs
 data/
-datasets/
-
-# Bỏ qua output training (checkpoints nặng)
 runs/
-outputs/
 logs/
-
-# Bỏ qua file môi trường ảo & cache
-venv/
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
+*.ipynb
 
-# Giữ lại folder release nhưng không lấy file weights bên trong (nếu nó nặng)
-# Nếu file weights < 100MB thì có thể comment dòng dưới để push lên
+# Chặn file build (của bước sau)
+build/
+dist/
+*.egg-info/
+
+# QUAN TRỌNG: Chặn weights nặng (vì đã có trên HuggingFace)
+*.pth
+*.pt
 omni_model/weights/*.pth
 
 # Hệ thống
 .DS_Store
 .idea/
 .vscode/
-
-# Jupyter Checkpoints
-.ipynb_checkpoints/
-*/.ipynb_checkpoints/
-**/.ipynb_checkpoints/
-*.ipynb_checkpoints
+EOT
