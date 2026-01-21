@@ -44,7 +44,7 @@ You can install the package directly from the source or via PyPI (once published
 pip install .
 
 # OR install directly from GitHub
-pip install git+[https://github.com/Bigkatoan/OmniModel.git](https://github.com/Bigkatoan/OmniModel.git)
+pip install git+https://github.com/Bigkatoan/OmniModel.git
 ```
 
 ### Option 2: Manual Installation (For Developers)
