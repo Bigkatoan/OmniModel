@@ -5,16 +5,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from huggingface_hub import hf_hub_download  # <--- THƯ VIỆN QUAN TRỌNG
+from huggingface_hub import hf_hub_download
 
+# Lưu ý dấu chấm (.) ở trước src -> Relative import cho package
 from .src.model.backbone import VisionEncoder
 from .src.model.prompt_encoder import PromptEncoder
 from .src.utils.tokenizer import BPE_Tokenizer
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-# Đặt ID Repo trên Hugging Face của bạn
-HF_REPO_ID = "Bigkatoan/OmniModel" 
+HF_REPO_ID = "bigkatoan/OmniModel" # Thay bằng ID thật của bạn sau này
 
 class OmniModel:
     def __init__(self, device=None):
@@ -26,49 +26,65 @@ class OmniModel:
             
         print(f">>> OmniModel initializing on {self.device}...")
 
-        # 2. Load Config (Đi kèm trong gói pip)
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(current_dir, "config/model_config.yaml")
+        # 2. Load Config
+        self.root_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(self.root_dir, "config/model_config.yaml")
         
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Missing config at {config_path}")
+
         with open(config_path, "r") as f:
             self.cfg = yaml.safe_load(f)
 
-        # 3. Load Weights (Tự động tải từ HuggingFace)
-        self._load_weights_from_hf()
+        # 3. Load Weights (Hybrid Mode)
+        self._load_weights()
         self._setup_transforms()
-        print(">>> Model loaded successfully!")
+        print(">>> OmniModel is ready!")
 
-    def _load_weights_from_hf(self):
+    def _get_file_path(self, filename):
+        """
+        Logic thông minh:
+        1. Tìm trong folder weights/ nội bộ trước (cho dev/test local).
+        2. Nếu không thấy, tự động tải từ HuggingFace Hub (cho user pip).
+        """
+        # Check Local
+        local_path = os.path.join(self.root_dir, "weights", filename)
+        if os.path.exists(local_path):
+            print(f"--> Found local weight: {filename}")
+            return local_path
+        
+        # Check HuggingFace
+        print(f"--> Local not found. Downloading {filename} from HuggingFace...")
+        try:
+            return hf_hub_download(repo_id=HF_REPO_ID, filename=filename)
+        except Exception as e:
+            raise RuntimeError(f"Could not download {filename} from HF. Error: {e}")
+
+    def _load_weights(self):
         embed_dim = self.cfg['model']['text']['embed_dim']
         
-        # Hàm tiện ích để download hoặc lấy từ cache
-        def get_weight_path(filename):
-            print(f"--> Checking/Downloading {filename} from HuggingFace...")
-            return hf_hub_download(repo_id=HF_REPO_ID, filename=filename)
-
-        # --- Vision Encoder ---
+        # --- Vision ---
         vis_cfg = self.cfg['model']['vision']
         self.vision = VisionEncoder(depths=vis_cfg['depths'], dims=vis_cfg['dims'])
-        vis_path = get_weight_path("vision_encoder.pth")
-        self.vision.load_state_dict(torch.load(vis_path, map_location=self.device))
+        path = self._get_file_path("vision_encoder.pth")
+        self.vision.load_state_dict(torch.load(path, map_location=self.device))
 
         # --- Projection ---
         self.vis_proj = nn.Linear(vis_cfg['dims'][-1], embed_dim)
-        proj_path = get_weight_path("vision_proj.pth")
-        self.vis_proj.load_state_dict(torch.load(proj_path, map_location=self.device))
+        path = self._get_file_path("vision_proj.pth")
+        self.vis_proj.load_state_dict(torch.load(path, map_location=self.device))
 
-        # --- Text Encoder ---
+        # --- Text ---
         txt_cfg = self.cfg['model']['text']
         self.text = PromptEncoder(vocab_size=self.cfg['data']['vocab_size'], 
                                   embed_dim=embed_dim, 
                                   depth=txt_cfg['depth'], 
                                   heads=txt_cfg['heads'])
-        txt_path = get_weight_path("text_encoder.pth")
-        self.text.load_state_dict(torch.load(txt_path, map_location=self.device))
+        path = self._get_file_path("text_encoder.pth")
+        self.text.load_state_dict(torch.load(path, map_location=self.device))
 
-        # --- Tokenizer (Load từ file config đi kèm package) ---
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        tok_path = os.path.join(current_dir, "config/tokenizer.json")
+        # --- Tokenizer ---
+        tok_path = os.path.join(self.root_dir, "config/tokenizer.json")
         self.tokenizer = BPE_Tokenizer(tok_path, self.cfg['data']['max_seq_len'])
 
         # Eval Mode
@@ -76,7 +92,6 @@ class OmniModel:
         self.vis_proj.to(self.device).eval()
         self.text.to(self.device).eval()
 
-    # ... (Giữ nguyên các hàm encode_image, encode_text, setup_transforms) ...
     def _setup_transforms(self):
         size = self.cfg['data']['img_size']
         self.transform = A.Compose([
@@ -91,6 +106,7 @@ class OmniModel:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
             image = image_input
+        
         img_tensor = self.transform(image=image)['image'].unsqueeze(0).to(self.device)
         with torch.no_grad():
             feat = self.vision(img_tensor)[-1].mean(dim=[-2, -1])
