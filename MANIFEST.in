@@ -1,0 +1,3 @@
+include omni_model/config/*.yaml
+include omni_model/config/*.json
+recursive-include omni_model/src *

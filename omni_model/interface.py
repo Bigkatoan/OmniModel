@@ -5,89 +5,78 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from huggingface_hub import hf_hub_download  # <--- THƯ VIỆN QUAN TRỌNG
 
-# Import các module nội bộ
-from src.model.backbone import VisionEncoder
-from src.model.prompt_encoder import PromptEncoder
-from src.utils.tokenizer import BPE_Tokenizer
+from .src.model.backbone import VisionEncoder
+from .src.model.prompt_encoder import PromptEncoder
+from .src.utils.tokenizer import BPE_Tokenizer
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-class OmniModel:
-    def __init__(self, model_path=None, device=None):
-        """
-        Khởi tạo OmniModel SDK.
-        
-        Args:
-            model_path (str): Đường dẫn đến thư mục 'omni_model'. 
-                              Mặc định sẽ lấy thư mục chứa file này.
-            device (str): 'cuda' hoặc 'cpu'.
-        """
-        # Tự động lấy đường dẫn của thư mục chứa file interface.py này
-        if model_path is None:
-            self.root = os.path.dirname(os.path.abspath(__file__))
-        else:
-            self.root = model_path
+# Đặt ID Repo trên Hugging Face của bạn
+HF_REPO_ID = "Bigkatoan/OmniModel" 
 
-        # Setup Device
+class OmniModel:
+    def __init__(self, device=None):
+        # 1. Setup Device
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
             
-        print(f">>> OmniModel initialized on: {self.device}")
+        print(f">>> OmniModel initializing on {self.device}...")
 
-        # Load Config
-        config_path = os.path.join(self.root, "config/model_config.yaml")
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"Missing config: {config_path}")
-            
+        # 2. Load Config (Đi kèm trong gói pip)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(current_dir, "config/model_config.yaml")
+        
         with open(config_path, "r") as f:
             self.cfg = yaml.safe_load(f)
 
-        # Load Weights
-        self._load_weights()
+        # 3. Load Weights (Tự động tải từ HuggingFace)
+        self._load_weights_from_hf()
         self._setup_transforms()
+        print(">>> Model loaded successfully!")
 
-    def _load_weights(self):
+    def _load_weights_from_hf(self):
         embed_dim = self.cfg['model']['text']['embed_dim']
-        weights_dir = os.path.join(self.root, "weights")
+        
+        # Hàm tiện ích để download hoặc lấy từ cache
+        def get_weight_path(filename):
+            print(f"--> Checking/Downloading {filename} from HuggingFace...")
+            return hf_hub_download(repo_id=HF_REPO_ID, filename=filename)
 
-        # 1. Vision Encoder
+        # --- Vision Encoder ---
         vis_cfg = self.cfg['model']['vision']
         self.vision = VisionEncoder(depths=vis_cfg['depths'], dims=vis_cfg['dims'])
-        
-        path = os.path.join(weights_dir, "vision_encoder.pth")
-        if os.path.exists(path):
-            self.vision.load_state_dict(torch.load(path, map_location=self.device))
-        else:
-            print(f"[WARN] Missing {path}, using random weights.")
+        vis_path = get_weight_path("vision_encoder.pth")
+        self.vision.load_state_dict(torch.load(vis_path, map_location=self.device))
 
-        # 2. Projection
+        # --- Projection ---
         self.vis_proj = nn.Linear(vis_cfg['dims'][-1], embed_dim)
-        path = os.path.join(weights_dir, "vision_proj.pth")
-        if os.path.exists(path):
-            self.vis_proj.load_state_dict(torch.load(path, map_location=self.device))
+        proj_path = get_weight_path("vision_proj.pth")
+        self.vis_proj.load_state_dict(torch.load(proj_path, map_location=self.device))
 
-        # 3. Text Encoder
+        # --- Text Encoder ---
         txt_cfg = self.cfg['model']['text']
         self.text = PromptEncoder(vocab_size=self.cfg['data']['vocab_size'], 
                                   embed_dim=embed_dim, 
                                   depth=txt_cfg['depth'], 
                                   heads=txt_cfg['heads'])
-        path = os.path.join(weights_dir, "text_encoder.pth")
-        if os.path.exists(path):
-            self.text.load_state_dict(torch.load(path, map_location=self.device))
+        txt_path = get_weight_path("text_encoder.pth")
+        self.text.load_state_dict(torch.load(txt_path, map_location=self.device))
 
-        # 4. Tokenizer
-        self.tokenizer = BPE_Tokenizer(os.path.join(self.root, "config/tokenizer.json"), 
-                                       self.cfg['data']['max_seq_len'])
-        
-        # Eval mode
+        # --- Tokenizer (Load từ file config đi kèm package) ---
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        tok_path = os.path.join(current_dir, "config/tokenizer.json")
+        self.tokenizer = BPE_Tokenizer(tok_path, self.cfg['data']['max_seq_len'])
+
+        # Eval Mode
         self.vision.to(self.device).eval()
         self.vis_proj.to(self.device).eval()
         self.text.to(self.device).eval()
 
+    # ... (Giữ nguyên các hàm encode_image, encode_text, setup_transforms) ...
     def _setup_transforms(self):
         size = self.cfg['data']['img_size']
         self.transform = A.Compose([
@@ -97,15 +86,12 @@ class OmniModel:
         ])
 
     def encode_image(self, image_input):
-        """Encode image (Path or Array) -> Vector [1, 512]"""
         if isinstance(image_input, str):
             image = cv2.imread(image_input)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
             image = image_input
-
         img_tensor = self.transform(image=image)['image'].unsqueeze(0).to(self.device)
-        
         with torch.no_grad():
             feat = self.vision(img_tensor)[-1].mean(dim=[-2, -1])
             embed = self.vis_proj(feat)
@@ -113,15 +99,13 @@ class OmniModel:
         return embed
 
     def encode_text(self, text):
-        """Encode text -> Vector [1, 512]"""
         input_ids, mask = self.tokenizer.encode(text)
         input_ids = input_ids.unsqueeze(0).to(self.device)
         mask = mask.unsqueeze(0).to(self.device)
-        
         with torch.no_grad():
             embed = self.text(input_ids, mask)
             embed = F.normalize(embed, dim=-1)
         return embed
-
+    
     def get_backbone(self):
         return self.vision
