@@ -14,7 +14,7 @@ __pycache__/
 
 # Giữ lại folder release nhưng không lấy file weights bên trong (nếu nó nặng)
 # Nếu file weights < 100MB thì có thể comment dòng dưới để push lên
-omni_model_release/weights/*.pth
+omni_model/weights/*.pth
 
 # Hệ thống
 .DS_Store

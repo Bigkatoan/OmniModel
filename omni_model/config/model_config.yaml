@@ -1,0 +1,14 @@
+data:
+  img_size: 224
+  max_seq_len: 32
+  vocab_size: 16384
+
+model:
+  text:
+    embed_dim: 512
+    depth: 6
+    heads: 8
+  vision:
+    # Cấu hình ConvNeXt-Tiny
+    depths: [3, 3, 9, 3]
+    dims: [96, 192, 384, 768]
